@@ -1,9 +1,14 @@
-import dotenv
+import http
+import json
 import logging
 import os
 import requests
-import telegram
 import time
+
+import dotenv
+import telegram
+
+import exceptions
 
 dotenv.load_dotenv()
 
@@ -39,8 +44,9 @@ def send_message(bot, message):
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info('Сообщение в телеграм успешно отправлено')
         logger.info(f'Текст: {message}')
-    except Exception:
+    except telegram.TelegramError as err:
         logger.error('Не получилось отправить сообщение в телеграм')
+        logger.error(f'Ошибка: {err}')
 
 
 def get_api_answer(current_timestamp):
@@ -48,16 +54,21 @@ def get_api_answer(current_timestamp):
     timestamp = current_timestamp
     params = {'from_date': timestamp}
     response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    if response.status_code == 503:
+    if response.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE:
         error_message = 'Сервер с данными недоступен. Ошибка 503.'
         logger.error(error_message)
-        raise Exception(error_message)
-    elif response.status_code != 200:
+        raise exceptions.server_error_503(error_message)
+    elif response.status_code != http.HTTPStatus.OK:
         error_message = ('Проблема с получением данных. '
                          + f'Код {response.status_code}.')
         logger.error(error_message)
+        raise exceptions.server_error_not_200(error_message)
+    try:
+        return response.json()
+    except json.decoder.JSONDecodeError:
+        error_message = 'Не получилось конвертировать данные из json.'
+        logger.error(error_message)
         raise Exception(error_message)
-    return response.json()
 
 
 def check_response(response):
@@ -71,7 +82,7 @@ def check_response(response):
     if not isinstance(homeworks, list):
         error_message = 'Данные по статусу работ некорректны.'
         logger.error(error_message)
-        raise TypeError
+        raise TypeError(error_message)
     return homeworks
 
 
@@ -85,7 +96,7 @@ def parse_status(homework):
     except KeyError:
         error_message = 'В данных сервера отсутствует необходимый ключ.'
         logger.error(error_message)
-        raise KeyError
+        raise KeyError(error_message)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -124,8 +135,6 @@ def main():
             logger.error(error_message)
             send_message(bot, error_message)
             time.sleep(RETRY_TIME)
-        else:
-            pass
 
 
 if __name__ == '__main__':
