@@ -1,5 +1,10 @@
-class server_error_503(Exception):
+class ServerError503(Exception):
+    """Исключение для ответа сервера 503."""
+
     pass
 
-class server_error_not_200(Exception):
+
+class HttpCodeNot200(Exception):
+    """Исключение для ответа сервера кроме нормального кода 200."""
+
     pass

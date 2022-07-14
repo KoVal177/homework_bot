@@ -2,10 +2,10 @@ import http
 import json
 import logging
 import os
-import requests
 import time
 
 import dotenv
+import requests
 import telegram
 
 import exceptions
@@ -53,16 +53,29 @@ def get_api_answer(current_timestamp):
     """Запрос к серверу об изменениях статусов проверки домашних работ."""
     timestamp = current_timestamp
     params = {'from_date': timestamp}
-    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    try:
+        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    except requests.exceptions.HTTPError as err:
+        error_message = f'Проблема с HTTP. Ошибка : {err}'
+        logger.error(error_message)
+        raise requests.exceptions.HTTPError(error_message)
+    except requests.exceptions.ConnectionError as err:
+        error_message = f'Проблема с соединением. Ошибка : {err}'
+        logger.error(error_message)
+        raise requests.exceptions.ConnectionError(error_message)
+    except requests.exceptions.Timeout as err:
+        error_message = f'Время ожидания вышло. Ошибка : {err}'
+        logger.error(error_message)
+        raise requests.exceptions.Timeout(error_message)
     if response.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE:
         error_message = 'Сервер с данными недоступен. Ошибка 503.'
         logger.error(error_message)
-        raise exceptions.server_error_503(error_message)
+        raise exceptions.ServerError503(error_message)
     elif response.status_code != http.HTTPStatus.OK:
         error_message = ('Проблема с получением данных. '
                          + f'Код {response.status_code}.')
         logger.error(error_message)
-        raise exceptions.server_error_not_200(error_message)
+        raise exceptions.HttpCodeNot200(error_message)
     try:
         return response.json()
     except json.decoder.JSONDecodeError:
